@@ -38,7 +38,7 @@ Inspired by the **CCB**, a collective of French streamers, MediaChat allows you 
     ```
     - You can get your **DISCORD_TOKEN** by creating a bot on the [Discord Developer Portal](https://discord.com/developers/applications).
     - You can get your **DISCORD_CLIENT_ID** and **DISCORD_GUILD_ID** via the Discord App (right click on the Bot and on the Server to get the ID)
-4. **use docker** :
+4. **use docker compose** :
     ```bash
     docker-compose up -d --build
     ```
