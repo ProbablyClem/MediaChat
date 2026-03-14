@@ -29,3 +29,7 @@ coverage
 *.sw?
 
 *.tsbuildinfo
+.gitnexus
+
+# Rust build artifacts
+infrastructure/front/native/target/
