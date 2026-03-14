@@ -42,11 +42,12 @@ fn main() -> anyhow::Result<()> {
     // ── egui/eframe native window ────────────────────────────────────────────
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            // Frameless transparent overlay, always on top
+            // Borderless maximized window — works correctly with always-on-top
+            // (exclusive fullscreen conflicts with HWND_TOPMOST on Windows)
             .with_decorations(false)
+            .with_maximized(true)
             .with_transparent(true)
             .with_always_on_top()
-            .with_fullscreen(true)
             // Clicks pass through to the window below
             .with_mouse_passthrough(true)
             // Don't steal keyboard focus from the streamer's game/app
