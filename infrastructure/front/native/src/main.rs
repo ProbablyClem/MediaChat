@@ -23,9 +23,6 @@ fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    // Initialise FFmpeg once (idempotent, safe to call before any threads spawn)
-    ffmpeg_next::init().expect("FFmpeg initialisation failed — are the system libraries installed?");
-
     // ── event channel: socket → app ──────────────────────────────────────────
     let (event_tx, event_rx) = mpsc::channel::<types::AppEvent>();
 
@@ -54,8 +51,8 @@ fn main() -> anyhow::Result<()> {
             .with_mouse_passthrough(true)
             // Don't steal keyboard focus from the streamer's game/app
             .with_active(false),
-        // wgpu backend — GPU-accelerated, works on Vulkan / Metal / DX12
-        renderer: eframe::Renderer::Wgpu,
+        // glow (OpenGL via glutin) — required for per-pixel alpha transparency on Windows
+        renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
 

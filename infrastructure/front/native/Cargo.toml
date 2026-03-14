@@ -28,11 +28,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 # HTTP downloads — rustls avoids a system OpenSSL pkg-config dependency
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 
-# Video decoding via system FFmpeg 4.x (Ubuntu 22.04 ships 4.4)
-# Only enable what we use — avfilter/avdevice are not installed on this system
-ffmpeg-next = { version = "4", default-features = false, features = ["format", "software-scaling"] }
-
-# Temp files for video decode
+# Temp files for video decode pipeline
 tempfile = "3"
 
 # CLI args
