@@ -7,14 +7,22 @@ use clap::Parser;
 use std::sync::mpsc;
 
 #[derive(Parser)]
-#[command(name = "mediachat-native", about = "MediaChat native overlay — no webview")]
+#[command(
+    name = "mediachat-native",
+    about = "MediaChat native overlay — no webview"
+)]
 struct Args {
     /// Room key to join (same as the URL fragment in the web viewer)
     #[arg(short, long, default_value = "default")]
     room: String,
 
     /// MediaChat backend URL
-    #[arg(short, long, env = "MEDIACHAT_SERVER", default_value = "http://localhost:3000")]
+    #[arg(
+        short,
+        long,
+        env = "MEDIACHAT_SERVER",
+        default_value = "http://localhost:3000"
+    )]
     server: String,
 }
 
@@ -47,7 +55,9 @@ fn main() -> anyhow::Result<()> {
             // with_transparent(true) intentionally removed: on NVIDIA the glow renderer
             // outputs alpha=0 for all pixels, making everything invisible. Transparency
             // is handled instead via Win32 SetLayeredWindowAttributes(LWA_COLORKEY).
-            .with_mouse_passthrough(true),
+            .with_mouse_passthrough(true)
+            .with_active(false)
+            .with_fullscreen(true),
         renderer: eframe::Renderer::Glow,
         ..Default::default()
     };

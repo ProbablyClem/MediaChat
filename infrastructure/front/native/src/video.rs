@@ -43,7 +43,10 @@ fn pipeline(url: String, event_tx: std::sync::mpsc::Sender<AppEvent>) -> Result<
 
     // ── hand off frame channel to the app ────────────────────────────────────
     let (frame_tx, frame_rx) = std::sync::mpsc::sync_channel::<VideoFrame>(FRAME_BUF);
-    let _ = event_tx.send(AppEvent::VideoReady { frame_rx, audio_path });
+    let _ = event_tx.send(AppEvent::VideoReady {
+        frame_rx,
+        audio_path,
+    });
 
     // ── decode video frames ───────────────────────────────────────────────────
     decode_video(&path, width, height, fps, frame_tx)?;
@@ -59,8 +62,10 @@ fn pipeline(url: String, event_tx: std::sync::mpsc::Sender<AppEvent>) -> Result<
 fn probe_video(path: &str) -> Result<(u32, u32, f64, bool)> {
     let output = Command::new("ffprobe")
         .args([
-            "-v", "quiet",
-            "-print_format", "json",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
             "-show_streams",
             path,
         ])
@@ -106,7 +111,11 @@ fn parse_ratio(s: &str) -> Option<f64> {
     let mut it = s.split('/');
     let num: f64 = it.next()?.parse().ok()?;
     let den: f64 = it.next()?.parse().ok()?;
-    if den == 0.0 { None } else { Some(num / den) }
+    if den == 0.0 {
+        None
+    } else {
+        Some(num / den)
+    }
 }
 
 /// Pipes raw RGBA frames from ffmpeg stdout and forwards them to the channel.
@@ -118,19 +127,17 @@ fn decode_video(
     tx: SyncSender<VideoFrame>,
 ) -> Result<()> {
     let mut child = Command::new("ffmpeg")
-        .args([
-            "-i", path,
-            "-f", "rawvideo",
-            "-pix_fmt", "rgba",
-            "pipe:1",
-        ])
+        .args(["-i", path, "-f", "rawvideo", "-pix_fmt", "rgba", "pipe:1"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()?;
 
     let frame_size = (width * height * 4) as usize;
     let mut buf = vec![0u8; frame_size];
-    let mut stdout = child.stdout.take().ok_or_else(|| anyhow!("ffmpeg: no stdout"))?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("ffmpeg: no stdout"))?;
     let mut frame_idx = 0u64;
 
     loop {

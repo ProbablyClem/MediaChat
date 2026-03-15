@@ -6,9 +6,7 @@ use std::{
     time::Instant,
 };
 
-use egui::{
-    Align2, Color32, ColorImage, FontId, Pos2, Rect, TextureHandle, TextureOptions, Vec2,
-};
+use egui::{Align2, Color32, ColorImage, FontId, Pos2, Rect, TextureHandle, TextureOptions, Vec2};
 
 use crate::{
     types::{AppEvent, MediaChat, MediaType, VideoFrame},
@@ -40,8 +38,8 @@ struct ActiveMedia {
     chat: MediaChat,
 
     avatar_tex: Option<TextureHandle>,
-    media_tex: Option<TextureHandle>,  // image-type media
-    frame_tex: Option<TextureHandle>,  // current video frame
+    media_tex: Option<TextureHandle>, // image-type media
+    frame_tex: Option<TextureHandle>, // current video frame
 
     /// Bounded receiver from the video decoder thread
     frame_rx: Option<Receiver<VideoFrame>>,
@@ -199,14 +197,14 @@ impl App {
     {
         let http = self.http.clone();
         let tx = self.event_tx.clone();
-        std::thread::spawn(move || {
-            match http.get(&url).send().and_then(|r| r.bytes()) {
+        std::thread::spawn(
+            move || match http.get(&url).send().and_then(|r| r.bytes()) {
                 Ok(bytes) => {
                     let _ = tx.send(make_event(bytes.to_vec()));
                 }
                 Err(e) => log::warn!("Download failed for {url}: {e}"),
-            }
-        });
+            },
+        );
     }
 
     // ── event processing ─────────────────────────────────────────────────────
@@ -233,11 +231,8 @@ impl App {
                 AppEvent::AvatarLoaded(data) => {
                     if let Some(active) = &mut self.current {
                         if let Some(ci) = decode_circular(&data) {
-                            active.avatar_tex = Some(ctx.load_texture(
-                                "avatar",
-                                ci,
-                                TextureOptions::NEAREST,
-                            ));
+                            active.avatar_tex =
+                                Some(ctx.load_texture("avatar", ci, TextureOptions::NEAREST));
                         }
                     }
                 }
@@ -245,16 +240,16 @@ impl App {
                 AppEvent::MediaImageLoaded(data) => {
                     if let Some(active) = &mut self.current {
                         if let Some(ci) = decode_image(&data) {
-                            active.media_tex = Some(ctx.load_texture(
-                                "media",
-                                ci,
-                                TextureOptions::LINEAR,
-                            ));
+                            active.media_tex =
+                                Some(ctx.load_texture("media", ci, TextureOptions::LINEAR));
                         }
                     }
                 }
 
-                AppEvent::VideoReady { frame_rx, audio_path } => {
+                AppEvent::VideoReady {
+                    frame_rx,
+                    audio_path,
+                } => {
                     if let Some(active) = &mut self.current {
                         active.frame_rx = Some(frame_rx);
 
@@ -332,7 +327,9 @@ impl eframe::App for App {
         if !self.win32_initialized {
             self.win32_initialized = true;
             #[cfg(windows)]
-            unsafe { win32_setup_overlay(); }
+            unsafe {
+                win32_setup_overlay();
+            }
         }
 
         // Color key: DWM makes RGB(1,0,1) transparent at compositor level.
@@ -354,7 +351,12 @@ impl eframe::App for App {
         self.process_events(ctx);
         self.update_video_frame(ctx);
 
-        if self.current.as_ref().map(|a| a.should_advance()).unwrap_or(false) {
+        if self
+            .current
+            .as_ref()
+            .map(|a| a.should_advance())
+            .unwrap_or(false)
+        {
             self.advance();
         }
 
@@ -368,7 +370,11 @@ impl eframe::App for App {
 
         let chat = active.chat.clone();
         let avatar_tex = active.avatar_tex.clone();
-        let media_tex = active.frame_tex.as_ref().or(active.media_tex.as_ref()).cloned();
+        let media_tex = active
+            .frame_tex
+            .as_ref()
+            .or(active.media_tex.as_ref())
+            .cloned();
         let time = ctx.input(|i| i.time);
 
         let screen = ctx.screen_rect();
@@ -379,7 +385,11 @@ impl eframe::App for App {
         let row_mid = h * 4.0 / 6.0;
         let row_bot = h / 6.0;
 
-        let hide_author = chat.options.as_ref().and_then(|o| o.hide_author).unwrap_or(false);
+        let hide_author = chat
+            .options
+            .as_ref()
+            .and_then(|o| o.hide_author)
+            .unwrap_or(false);
 
         let text_opts = chat.options.as_ref().and_then(|o| o.text.as_ref());
         let text_color = text_opts
@@ -480,7 +490,10 @@ fn decode_circular(data: &[u8]) -> Option<ColorImage> {
                 // Fill with opaque black (the color key) so DWM keys it out cleanly.
                 // alpha=0 would cause blending artifacts at the circle edges.
                 let p = rgba.get_pixel_mut(x, y);
-                p[0] = 0; p[1] = 0; p[2] = 0; p[3] = 255;
+                p[0] = 0;
+                p[1] = 0;
+                p[2] = 0;
+                p[3] = 255;
             }
         }
     }
@@ -543,8 +556,12 @@ unsafe fn win32_setup_overlay() {
     SetWindowLongW(
         hwnd,
         GWL_STYLE,
-        style & !(WS_CAPTION as i32 | WS_THICKFRAME as i32 | WS_MINIMIZEBOX as i32
-            | WS_MAXIMIZEBOX as i32 | WS_SYSMENU as i32),
+        style
+            & !(WS_CAPTION as i32
+                | WS_THICKFRAME as i32
+                | WS_MINIMIZEBOX as i32
+                | WS_MAXIMIZEBOX as i32
+                | WS_SYSMENU as i32),
     );
 
     // Set extended styles: WS_EX_LAYERED (required for color key) + WS_EX_TRANSPARENT (click-through)
@@ -563,7 +580,10 @@ unsafe fn win32_setup_overlay() {
     SetWindowPos(
         hwnd,
         std::ptr::null_mut(),
-        0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0,
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
     );
 
