@@ -31,6 +31,9 @@ pub struct App {
     audio_child: Option<Child>,
 
     http: reqwest::blocking::Client,
+
+    /// Whether Win32 overlay setup has been done (runs once after window is ready)
+    win32_initialized: bool,
 }
 
 struct ActiveMedia {
@@ -103,7 +106,11 @@ impl Drop for ActiveMedia {
 // ─────────────────────────────────────────────────────────────────────────────
 
 impl App {
-    pub fn new(event_tx: Sender<AppEvent>, event_rx: Receiver<AppEvent>) -> Self {
+    pub fn new(
+        _cc: &eframe::CreationContext,
+        event_tx: Sender<AppEvent>,
+        event_rx: Receiver<AppEvent>,
+    ) -> Self {
         Self {
             event_tx,
             event_rx,
@@ -114,6 +121,7 @@ impl App {
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .unwrap(),
+            win32_initialized: false,
         }
     }
 
@@ -320,9 +328,20 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // One-time Win32 overlay setup: color-key transparency + remove decorations
+        if !self.win32_initialized {
+            self.win32_initialized = true;
+            #[cfg(windows)]
+            unsafe { win32_setup_overlay(); }
+        }
+
+        // Color key: DWM makes RGB(1,0,1) transparent at compositor level.
+        // with_transparent(true) is NOT used — on NVIDIA the glow renderer outputs
+        // alpha=0 for all pixels, making per-pixel alpha compositing invisible.
+        let key = Color32::from_rgb(1, 0, 1);
         ctx.set_visuals(egui::Visuals {
-            window_fill: Color32::TRANSPARENT,
-            panel_fill: Color32::TRANSPARENT,
+            window_fill: key,
+            panel_fill: key,
             ..egui::Visuals::dark()
         });
 
@@ -333,13 +352,17 @@ impl eframe::App for App {
             self.advance();
         }
 
-        // Repaint at ~60 fps for smooth video playback and animations
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
 
         let Some(active) = &self.current else {
             egui::CentralPanel::default()
-                .frame(egui::Frame::none().fill(Color32::TRANSPARENT))
-                .show(ctx, |_ui| {});
+                .frame(egui::Frame::none().fill(key))
+                .show(ctx, |ui| {
+                    let r = ui.max_rect();
+                    let center = egui::Pos2::new(r.right() - 30.0, r.bottom() - 30.0);
+                    ui.painter().circle_filled(center, 18.0, Color32::from_rgb(30, 30, 30));
+                    ui.painter().circle_filled(center, 14.0, Color32::from_rgb(50, 220, 80));
+                });
             return;
         };
 
@@ -352,16 +375,11 @@ impl eframe::App for App {
         let w = screen.width();
         let h = screen.height();
 
-        // Vertical thirds: author (⅙), media (⅔), message (⅙)
         let row_top = h / 6.0;
         let row_mid = h * 4.0 / 6.0;
         let row_bot = h / 6.0;
 
-        let hide_author = chat
-            .options
-            .as_ref()
-            .and_then(|o| o.hide_author)
-            .unwrap_or(false);
+        let hide_author = chat.options.as_ref().and_then(|o| o.hide_author).unwrap_or(false);
 
         let text_opts = chat.options.as_ref().and_then(|o| o.text.as_ref());
         let text_color = text_opts
@@ -370,21 +388,18 @@ impl eframe::App for App {
         let text_size = text_opts.and_then(|t| t.font_size).unwrap_or(36.0);
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::none().fill(Color32::TRANSPARENT))
+            .frame(egui::Frame::none().fill(key))
             .show(ctx, |ui| {
                 let p = ui.painter();
 
-                // ── author ────────────────────────────────────────────────────
                 if !hide_author {
                     let float_y = screen.top()
                         + row_top / 2.0
                         + (time * std::f64::consts::TAU / 4.0).sin() as f32 * 8.0;
                     let cx = w / 2.0;
-
                     if let Some(ref tex) = avatar_tex {
                         let sz = 72.0_f32;
-                        let rect =
-                            Rect::from_center_size(Pos2::new(cx, float_y), Vec2::splat(sz));
+                        let rect = Rect::from_center_size(Pos2::new(cx, float_y), Vec2::splat(sz));
                         p.image(
                             tex.id(),
                             rect,
@@ -402,7 +417,6 @@ impl eframe::App for App {
                     }
                 }
 
-                // ── media ─────────────────────────────────────────────────────
                 let mid = Rect::from_min_size(
                     Pos2::new(screen.left(), screen.top() + row_top),
                     Vec2::new(w, row_mid),
@@ -419,7 +433,6 @@ impl eframe::App for App {
                     );
                 }
 
-                // ── message ───────────────────────────────────────────────────
                 if let Some(ref msg) = chat.message {
                     if !msg.is_empty() {
                         let msg_y = screen.top() + row_top + row_mid + row_bot / 2.0;
@@ -437,7 +450,8 @@ impl eframe::App for App {
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        [0.0, 0.0, 0.0, 0.0]
+        // Matches the color key: RGB(1,0,1) in ~linear space
+        [1.0 / 255.0, 0.0, 1.0 / 255.0, 1.0]
     }
 }
 
@@ -493,6 +507,67 @@ fn outlined_text(
         );
     }
     p.text(center, Align2::CENTER_CENTER, text, font, fill);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Win32 overlay setup (Windows only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Configure the overlay window via Win32:
+///   - WS_EX_LAYERED + WS_EX_TRANSPARENT: color-key transparency + click-through
+///   - SetLayeredWindowAttributes with LWA_COLORKEY: DWM makes RGB(1,0,1) transparent
+///     at the compositor level — works on all GPU vendors including NVIDIA, unlike
+///     per-pixel alpha which requires the GPU to correctly output the alpha channel.
+///   - Maximize to fill the current monitor, remove title bar
+#[cfg(windows)]
+unsafe fn win32_setup_overlay() {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use winapi::um::winuser::*;
+
+    let title: Vec<u16> = OsStr::new("MediaChat")
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    let hwnd = FindWindowW(std::ptr::null(), title.as_ptr());
+    if hwnd.is_null() {
+        log::warn!("[overlay] HWND not found — Win32 setup skipped");
+        return;
+    }
+
+    // Remove title bar / borders
+    let style = GetWindowLongW(hwnd, GWL_STYLE);
+    SetWindowLongW(
+        hwnd,
+        GWL_STYLE,
+        style & !(WS_CAPTION as i32 | WS_THICKFRAME as i32 | WS_MINIMIZEBOX as i32
+            | WS_MAXIMIZEBOX as i32 | WS_SYSMENU as i32),
+    );
+
+    // Set extended styles: WS_EX_LAYERED (required for color key) + WS_EX_TRANSPARENT (click-through)
+    let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+    SetWindowLongW(
+        hwnd,
+        GWL_EXSTYLE,
+        ex_style | WS_EX_LAYERED as i32 | WS_EX_TRANSPARENT as i32,
+    );
+
+    // Color key: RGB(1, 0, 1) = COLORREF 0x00010001 (format: 0x00BBGGRR).
+    // DWM makes every pixel of this exact color transparent — GPU-independent.
+    // Must match the `key` color in update() and the value in clear_color().
+    let color_key: u32 = 0x0001_0001; // RGB(1, 0, 1)
+    SetLayeredWindowAttributes(hwnd, color_key, 0, LWA_COLORKEY);
+
+    SetWindowPos(
+        hwnd,
+        std::ptr::null_mut(),
+        0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
+    );
+
+    ShowWindow(hwnd, SW_MAXIMIZE);
+    log::info!("[overlay] Win32 color-key overlay setup complete (HWND={hwnd:?}, key=RGB(1,0,1))");
 }
 
 /// Parse a CSS hex colour string (#rrggbb or #rgb) → egui Color32.

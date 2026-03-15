@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Native GUI — transparent, borderless, GPU-rendered, no webview
-eframe = { version = "0.29", features = ["wgpu"] }
+eframe = { version = "0.29", features = ["wgpu", "glow"] }
 egui = "0.29"
 
 # Async runtime for Socket.IO
@@ -40,3 +40,7 @@ env_logger = "0.11"
 
 # Error handling
 anyhow = "1"
+
+# Windows API for overlay window setup
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser"] }

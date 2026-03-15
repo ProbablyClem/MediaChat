@@ -42,17 +42,12 @@ fn main() -> anyhow::Result<()> {
     // ── egui/eframe native window ────────────────────────────────────────────
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            // Borderless maximized window — works correctly with always-on-top
-            // (exclusive fullscreen conflicts with HWND_TOPMOST on Windows)
-            .with_decorations(false)
-            .with_maximized(true)
-            .with_transparent(true)
+            .with_inner_size([800.0, 600.0])
             .with_always_on_top()
-            // Clicks pass through to the window below
-            .with_mouse_passthrough(true)
-            // Don't steal keyboard focus from the streamer's game/app
-            .with_active(false),
-        // glow (OpenGL via glutin) — required for per-pixel alpha transparency on Windows
+            // with_transparent(true) intentionally removed: on NVIDIA the glow renderer
+            // outputs alpha=0 for all pixels, making everything invisible. Transparency
+            // is handled instead via Win32 SetLayeredWindowAttributes(LWA_COLORKEY).
+            .with_mouse_passthrough(true),
         renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
@@ -60,7 +55,7 @@ fn main() -> anyhow::Result<()> {
     eframe::run_native(
         "MediaChat",
         options,
-        Box::new(move |_cc| Ok(Box::new(app::App::new(event_tx, event_rx)))),
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, event_tx, event_rx)))),
     )
     .map_err(|e| anyhow::anyhow!("eframe error: {e}"))
 }
