@@ -236,7 +236,7 @@ impl App {
                             active.avatar_tex = Some(ctx.load_texture(
                                 "avatar",
                                 ci,
-                                TextureOptions::LINEAR,
+                                TextureOptions::NEAREST,
                             ));
                         }
                     }
@@ -338,10 +338,16 @@ impl eframe::App for App {
         // Color key: DWM makes RGB(1,0,1) transparent at compositor level.
         // with_transparent(true) is NOT used — on NVIDIA the glow renderer outputs
         // alpha=0 for all pixels, making per-pixel alpha compositing invisible.
-        let key = Color32::from_rgb(1, 0, 1);
+        // Disable AA feathering: blended edge pixels don't match the color key
+        // and show up as visible artifacts against the transparent background.
+        ctx.tessellation_options_mut(|o| o.feathering = false);
+
+        let key = Color32::BLACK;
         ctx.set_visuals(egui::Visuals {
             window_fill: key,
             panel_fill: key,
+            window_shadow: egui::Shadow::NONE,
+            popup_shadow: egui::Shadow::NONE,
             ..egui::Visuals::dark()
         });
 
@@ -355,14 +361,8 @@ impl eframe::App for App {
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
 
         let Some(active) = &self.current else {
-            egui::CentralPanel::default()
-                .frame(egui::Frame::none().fill(key))
-                .show(ctx, |ui| {
-                    let r = ui.max_rect();
-                    let center = egui::Pos2::new(r.right() - 30.0, r.bottom() - 30.0);
-                    ui.painter().circle_filled(center, 18.0, Color32::from_rgb(30, 30, 30));
-                    ui.painter().circle_filled(center, 14.0, Color32::from_rgb(50, 220, 80));
-                });
+            // DEBUG: draw nothing at all — only the GL clear (key color) is active.
+            // If dots still appear, they come from Win32/DWM, not egui drawing.
             return;
         };
 
@@ -450,8 +450,7 @@ impl eframe::App for App {
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        // Matches the color key: RGB(1,0,1) in ~linear space
-        [1.0 / 255.0, 0.0, 1.0 / 255.0, 1.0]
+        [0.0, 0.0, 0.0, 1.0] // black = color key → transparent
     }
 }
 
@@ -478,7 +477,10 @@ fn decode_circular(data: &[u8]) -> Option<ColorImage> {
             let dx = x as f32 - c;
             let dy = y as f32 - c;
             if dx * dx + dy * dy > r2 {
-                rgba.get_pixel_mut(x, y)[3] = 0;
+                // Fill with opaque black (the color key) so DWM keys it out cleanly.
+                // alpha=0 would cause blending artifacts at the circle edges.
+                let p = rgba.get_pixel_mut(x, y);
+                p[0] = 0; p[1] = 0; p[2] = 0; p[3] = 255;
             }
         }
     }
@@ -556,8 +558,7 @@ unsafe fn win32_setup_overlay() {
     // Color key: RGB(1, 0, 1) = COLORREF 0x00010001 (format: 0x00BBGGRR).
     // DWM makes every pixel of this exact color transparent — GPU-independent.
     // Must match the `key` color in update() and the value in clear_color().
-    let color_key: u32 = 0x0001_0001; // RGB(1, 0, 1)
-    SetLayeredWindowAttributes(hwnd, color_key, 0, LWA_COLORKEY);
+    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_COLORKEY); // black = key color
 
     SetWindowPos(
         hwnd,
