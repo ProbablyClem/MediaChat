@@ -164,9 +164,9 @@ impl App {
             match ev {
                 AppEvent::NewMediaChat(mc) => {
                     if self.current.is_none() {
-                        self.start_item(mc);
+                        self.start_item(*mc);
                     } else {
-                        self.queue.push_back(mc);
+                        self.queue.push_back(*mc);
                     }
                 }
 

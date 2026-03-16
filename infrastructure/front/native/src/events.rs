@@ -4,7 +4,7 @@ use crate::{media::MediaChat, video::VideoFrame};
 
 pub enum AppEvent {
     // Socket.IO events
-    NewMediaChat(MediaChat),
+    NewMediaChat(Box<MediaChat>),
     Flush,
     Skip,
 

@@ -24,7 +24,7 @@ pub async fn run_socket(
     let waker_media = waker.clone();
     let waker_flush = waker.clone();
     let waker_skip = waker.clone();
-    let room_join = room.clone();
+    let room_join = room;
 
     let client = ClientBuilder::new(server_url)
         .on("connect", move |_, socket: Client| {
@@ -44,7 +44,7 @@ pub async fn run_socket(
                     for val in values {
                         match serde_json::from_value::<MediaChat>(val) {
                             Ok(mc) => {
-                                let _ = tx.send(AppEvent::NewMediaChat(mc));
+                                let _ = tx.send(AppEvent::NewMediaChat(Box::new(mc)));
                                 wake(&waker);
                             }
                             Err(e) => log::warn!("mediachat parse error: {e}"),
