@@ -6,7 +6,10 @@ use rust_socketio::{
 use serde_json::json;
 use std::sync::mpsc::Sender;
 
-use crate::types::{wake, AppEvent, CtxWaker, MediaChat};
+use crate::{
+    media::MediaChat,
+    types::{wake, AppEvent, CtxWaker},
+};
 
 pub async fn run_socket(
     server_url: String,

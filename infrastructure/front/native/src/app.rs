@@ -6,10 +6,11 @@ use std::{
     time::Instant,
 };
 
-use egui::{Align2, Color32, ColorImage, FontId, Pos2, Rect, TextureHandle, TextureOptions, Vec2};
+use egui::{Align2, Color32, ColorImage, FontId, Pos2, Rect, TextureOptions, Vec2};
 
 use crate::{
-    types::{wake, AppEvent, CtxWaker, MediaChat, MediaType, VideoFrame},
+    media::{ActiveMedia, MediaChat, MediaType},
+    types::{wake, AppEvent, CtxWaker, VideoFrame},
     video::spawn_video_decoder,
 };
 
@@ -34,75 +35,6 @@ pub struct App {
     win32_initialized: bool,
 
     waker: CtxWaker,
-}
-
-struct ActiveMedia {
-    chat: MediaChat,
-
-    avatar_tex: Option<TextureHandle>,
-    media_tex: Option<TextureHandle>, // image-type media
-    frame_tex: Option<TextureHandle>, // current video frame
-
-    /// Bounded receiver from the video decoder thread
-    frame_rx: Option<Receiver<VideoFrame>>,
-    /// Decoded frames waiting to be displayed at the right PTS
-    pending_frames: VecDeque<VideoFrame>,
-    video_ended: bool,
-    /// Wall-clock instant when the first frame was received (video clock origin)
-    video_clock: Option<Instant>,
-
-    /// Wall-clock instant this item started displaying
-    started_at: Instant,
-
-    /// Wall-clock instant when ffplay audio was started (used as video clock base for A/V sync)
-    audio_started_at: Option<Instant>,
-
-    /// Temp file to clean up after the video finishes
-    temp_path: Option<PathBuf>,
-}
-
-impl ActiveMedia {
-    fn new(chat: MediaChat) -> Self {
-        Self {
-            chat,
-            avatar_tex: None,
-            media_tex: None,
-            frame_tex: None,
-            frame_rx: None,
-            pending_frames: VecDeque::new(),
-            video_ended: false,
-            video_clock: None,
-            started_at: Instant::now(),
-            audio_started_at: None,
-            temp_path: None,
-        }
-    }
-
-    fn is_video(&self) -> bool {
-        self.chat
-            .media
-            .as_ref()
-            .map(|m| m.media_type == MediaType::Video)
-            .unwrap_or(false)
-    }
-
-    fn should_advance(&self) -> bool {
-        if self.is_video() {
-            self.video_ended && self.pending_frames.is_empty()
-        } else {
-            let dur = self.chat.duration.unwrap_or(5.0);
-            self.started_at.elapsed().as_secs_f64() >= dur
-        }
-    }
-}
-
-impl Drop for ActiveMedia {
-    fn drop(&mut self) {
-        // Remove the downloaded video temp file when this item is done
-        if let Some(ref path) = self.temp_path {
-            let _ = std::fs::remove_file(path);
-        }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -152,7 +84,11 @@ impl App {
                     self.download_in_bg(media.url.clone(), AppEvent::MediaImageLoaded);
                 }
                 MediaType::Video => {
-                    spawn_video_decoder(media.url.clone(), self.event_tx.clone(), self.waker.clone());
+                    spawn_video_decoder(
+                        media.url.clone(),
+                        self.event_tx.clone(),
+                        self.waker.clone(),
+                    );
                 }
                 MediaType::Sound => {
                     // ffplay handles HTTP URLs directly — no download needed
@@ -303,9 +239,7 @@ impl App {
                     // Use audio_started_at as the clock base so that frame PTS
                     // is measured against the same origin as audio playback.
                     // Fall back to now() for video-only streams (no audio).
-                    active.video_clock = Some(
-                        active.audio_started_at.unwrap_or_else(Instant::now)
-                    );
+                    active.video_clock = Some(active.audio_started_at.unwrap_or_else(Instant::now));
                 }
                 active.pending_frames.push_back(frame);
             }
