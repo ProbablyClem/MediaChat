@@ -2,11 +2,12 @@ mod app;
 mod media;
 mod socket;
 mod types;
+mod ui;
 mod video;
 use clap::Parser;
 use std::sync::mpsc;
-
 use types::new_waker;
+mod windows;
 
 #[derive(Parser)]
 #[command(

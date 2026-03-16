@@ -10,7 +10,7 @@ use std::sync::mpsc::SyncSender;
 
 use anyhow::{anyhow, Result};
 
-use crate::types::{wake, AppEvent, CtxWaker, VideoFrame};
+use crate::types::{wake, AppEvent, CtxWaker};
 
 /// Number of decoded frames buffered in the channel before back-pressure kicks in.
 const FRAME_BUF: usize = 15;
@@ -174,4 +174,13 @@ fn decode_video(
 
     let _ = child.wait();
     Ok(())
+}
+
+pub struct VideoFrame {
+    pub width: u32,
+    pub height: u32,
+    /// RGBA packed bytes, length = width * height * 4
+    pub data: Vec<u8>,
+    /// Presentation timestamp in seconds
+    pub pts_secs: f64,
 }

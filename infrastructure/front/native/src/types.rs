@@ -1,17 +1,6 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::{mpsc::Receiver, Arc, OnceLock};
 
-use crate::media::MediaChat;
-
-// ---------- internal app messages ----------
-
-pub struct VideoFrame {
-    pub width: u32,
-    pub height: u32,
-    /// RGBA packed bytes, length = width * height * 4
-    pub data: Vec<u8>,
-    /// Presentation timestamp in seconds
-    pub pts_secs: f64,
-}
+use crate::{media::MediaChat, video::VideoFrame};
 
 pub enum AppEvent {
     // Socket.IO events
@@ -27,7 +16,7 @@ pub enum AppEvent {
     /// `frame_rx`  — receive decoded RGBA frames
     /// `audio_path` — temp file path to pass to ffplay for audio (None if no audio stream)
     VideoReady {
-        frame_rx: std::sync::mpsc::Receiver<VideoFrame>,
+        frame_rx: Receiver<VideoFrame>,
         audio_path: Option<String>,
     },
 

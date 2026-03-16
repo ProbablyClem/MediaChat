@@ -4,7 +4,7 @@ use egui::TextureHandle;
 
 use crate::{
     media::{MediaChat, MediaType},
-    types::VideoFrame,
+    video::VideoFrame,
 };
 
 pub struct ActiveMedia {
