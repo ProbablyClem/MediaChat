@@ -6,7 +6,7 @@
 /// Audio is handled by spawning `ffplay -nodisp -autoexit` in app.rs.
 use std::io::Read;
 use std::process::{Command, Stdio};
-use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::{Sender, SyncSender};
 
 use anyhow::{anyhow, Result};
 
@@ -16,7 +16,7 @@ use crate::types::{AppEvent, VideoFrame};
 const FRAME_BUF: usize = 15;
 
 /// Spawn the video decode pipeline in a background thread.
-pub fn spawn_video_decoder(url: String, event_tx: std::sync::mpsc::Sender<AppEvent>) {
+pub fn spawn_video_decoder(url: String, event_tx: Sender<AppEvent>) {
     std::thread::spawn(move || {
         if let Err(e) = pipeline(url, event_tx.clone()) {
             log::error!("Video pipeline error: {e}");
@@ -25,7 +25,7 @@ pub fn spawn_video_decoder(url: String, event_tx: std::sync::mpsc::Sender<AppEve
     });
 }
 
-fn pipeline(url: String, event_tx: std::sync::mpsc::Sender<AppEvent>) -> Result<()> {
+fn pipeline(url: String, event_tx: Sender<AppEvent>) -> Result<()> {
     // ── download ─────────────────────────────────────────────────────────────
     log::info!("Downloading video: {url}");
     let bytes = reqwest::blocking::get(&url)?.bytes()?;
