@@ -9,7 +9,7 @@ use std::{
 use egui::{Align2, Color32, ColorImage, FontId, Pos2, Rect, TextureHandle, TextureOptions, Vec2};
 
 use crate::{
-    types::{AppEvent, MediaChat, MediaType, VideoFrame},
+    types::{wake, AppEvent, CtxWaker, MediaChat, MediaType, VideoFrame},
     video::spawn_video_decoder,
 };
 
@@ -32,6 +32,8 @@ pub struct App {
 
     /// Whether Win32 overlay setup has been done (runs once after window is ready)
     win32_initialized: bool,
+
+    waker: CtxWaker,
 }
 
 struct ActiveMedia {
@@ -52,6 +54,9 @@ struct ActiveMedia {
     /// Wall-clock instant this item started displaying
     started_at: Instant,
 
+    /// Wall-clock instant when ffplay audio was started (used as video clock base for A/V sync)
+    audio_started_at: Option<Instant>,
+
     /// Temp file to clean up after the video finishes
     temp_path: Option<PathBuf>,
 }
@@ -68,6 +73,7 @@ impl ActiveMedia {
             video_ended: false,
             video_clock: None,
             started_at: Instant::now(),
+            audio_started_at: None,
             temp_path: None,
         }
     }
@@ -105,10 +111,14 @@ impl Drop for ActiveMedia {
 
 impl App {
     pub fn new(
-        _cc: &eframe::CreationContext,
+        cc: &eframe::CreationContext,
         event_tx: Sender<AppEvent>,
         event_rx: Receiver<AppEvent>,
+        waker: CtxWaker,
     ) -> Self {
+        // Register the egui context so background threads can request repaints
+        let _ = waker.set(cc.egui_ctx.clone());
+
         Self {
             event_tx,
             event_rx,
@@ -120,6 +130,7 @@ impl App {
                 .build()
                 .unwrap(),
             win32_initialized: false,
+            waker,
         }
     }
 
@@ -141,7 +152,7 @@ impl App {
                     self.download_in_bg(media.url.clone(), AppEvent::MediaImageLoaded);
                 }
                 MediaType::Video => {
-                    spawn_video_decoder(media.url.clone(), self.event_tx.clone());
+                    spawn_video_decoder(media.url.clone(), self.event_tx.clone(), self.waker.clone());
                 }
                 MediaType::Sound => {
                     // ffplay handles HTTP URLs directly — no download needed
@@ -197,10 +208,12 @@ impl App {
     {
         let http = self.http.clone();
         let tx = self.event_tx.clone();
+        let waker = self.waker.clone();
         std::thread::spawn(
             move || match http.get(&url).send().and_then(|r| r.bytes()) {
                 Ok(bytes) => {
                     let _ = tx.send(make_event(bytes.to_vec()));
+                    wake(&waker);
                 }
                 Err(e) => log::warn!("Download failed for {url}: {e}"),
             },
@@ -253,11 +266,13 @@ impl App {
                     if let Some(active) = &mut self.current {
                         active.frame_rx = Some(frame_rx);
 
-                        // Start audio for this video
+                        // Start audio and record the precise instant it began.
+                        // This instant is used as the video clock origin so that
+                        // frame PTS values are measured from the same zero as audio.
                         if let Some(ref path) = audio_path {
                             self.play_audio_file(path);
-                            // Also record the path for cleanup
                             if let Some(ref mut a) = self.current {
+                                a.audio_started_at = Some(Instant::now());
                                 a.temp_path = Some(PathBuf::from(path));
                             }
                         }
@@ -285,7 +300,12 @@ impl App {
         if let Some(ref rx) = active.frame_rx {
             while let Ok(frame) = rx.try_recv() {
                 if active.video_clock.is_none() {
-                    active.video_clock = Some(Instant::now());
+                    // Use audio_started_at as the clock base so that frame PTS
+                    // is measured against the same origin as audio playback.
+                    // Fall back to now() for video-only streams (no audio).
+                    active.video_clock = Some(
+                        active.audio_started_at.unwrap_or_else(Instant::now)
+                    );
                 }
                 active.pending_frames.push_back(frame);
             }
@@ -360,7 +380,21 @@ impl eframe::App for App {
             self.advance();
         }
 
-        ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        // Repaint scheduling: event-driven when idle, frame-rate-locked when active.
+        // Background threads call ctx.request_repaint() via the CtxWaker when new
+        // events arrive, so we don't need to poll when there is nothing to show.
+        match &self.current {
+            Some(a) if a.is_video() => {
+                ctx.request_repaint_after(std::time::Duration::from_millis(16));
+            }
+            Some(_) => {
+                // Image / sound / text: repaint at 30 fps for the bob animation.
+                ctx.request_repaint_after(std::time::Duration::from_millis(33));
+            }
+            None => {
+                // Idle: sleep until a background thread wakes us via ctx.request_repaint().
+            }
+        }
 
         let Some(active) = &self.current else {
             // DEBUG: draw nothing at all — only the GL clear (key color) is active.

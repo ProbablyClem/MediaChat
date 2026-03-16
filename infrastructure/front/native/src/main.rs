@@ -6,6 +6,8 @@ mod video;
 use clap::Parser;
 use std::sync::mpsc;
 
+use types::new_waker;
+
 #[derive(Parser)]
 #[command(
     name = "mediachat-native",
@@ -34,14 +36,18 @@ fn main() -> anyhow::Result<()> {
     // ── event channel: socket → app ──────────────────────────────────────────
     let (event_tx, event_rx) = mpsc::channel::<types::AppEvent>();
 
+    // ── waker: set once egui context is ready, then used by all bg threads ──
+    let waker = new_waker();
+
     // ── Socket.IO in a dedicated OS thread with its own Tokio runtime ────────
     {
         let tx = event_tx.clone();
+        let waker = waker.clone();
         let server = args.server.clone();
         let room = args.room.clone();
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-            if let Err(e) = rt.block_on(socket::run_socket(server, room, tx)) {
+            if let Err(e) = rt.block_on(socket::run_socket(server, room, tx, waker)) {
                 log::error!("Socket.IO thread exited with error: {e}");
             }
         });
@@ -65,7 +71,7 @@ fn main() -> anyhow::Result<()> {
     eframe::run_native(
         "MediaChat",
         options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, event_tx, event_rx)))),
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, event_tx, event_rx, waker)))),
     )
     .map_err(|e| anyhow::anyhow!("eframe error: {e}"))
 }

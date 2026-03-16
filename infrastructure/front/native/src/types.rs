@@ -1,4 +1,6 @@
+use egui;
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, OnceLock};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Author {
@@ -95,4 +97,19 @@ pub enum AppEvent {
 
     /// All video frames have been sent (channel may still have buffered frames)
     VideoEnded,
+}
+
+// ─── egui wakeup helper ────────────────────────────────────────────────────
+/// A cheaply-cloneable handle that lets background threads request an egui repaint.
+/// The inner OnceLock is set once, in App::new, after the egui context is ready.
+pub type CtxWaker = Arc<OnceLock<egui::Context>>;
+
+pub fn new_waker() -> CtxWaker {
+    Arc::new(OnceLock::new())
+}
+
+pub fn wake(w: &CtxWaker) {
+    if let Some(ctx) = w.get() {
+        ctx.request_repaint();
+    }
 }

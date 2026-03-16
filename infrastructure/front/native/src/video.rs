@@ -6,26 +6,35 @@
 /// Audio is handled by spawning `ffplay -nodisp -autoexit` in app.rs.
 use std::io::Read;
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{Sender, SyncSender};
+use std::sync::mpsc::SyncSender;
 
 use anyhow::{anyhow, Result};
 
-use crate::types::{AppEvent, VideoFrame};
+use crate::types::{wake, AppEvent, CtxWaker, VideoFrame};
 
 /// Number of decoded frames buffered in the channel before back-pressure kicks in.
 const FRAME_BUF: usize = 15;
 
 /// Spawn the video decode pipeline in a background thread.
-pub fn spawn_video_decoder(url: String, event_tx: Sender<AppEvent>) {
+pub fn spawn_video_decoder(
+    url: String,
+    event_tx: std::sync::mpsc::Sender<AppEvent>,
+    waker: CtxWaker,
+) {
     std::thread::spawn(move || {
-        if let Err(e) = pipeline(url, event_tx.clone()) {
+        if let Err(e) = pipeline(url, event_tx.clone(), waker.clone()) {
             log::error!("Video pipeline error: {e}");
             let _ = event_tx.send(AppEvent::VideoEnded);
+            wake(&waker);
         }
     });
 }
 
-fn pipeline(url: String, event_tx: Sender<AppEvent>) -> Result<()> {
+fn pipeline(
+    url: String,
+    event_tx: std::sync::mpsc::Sender<AppEvent>,
+    waker: CtxWaker,
+) -> Result<()> {
     // ── download ─────────────────────────────────────────────────────────────
     log::info!("Downloading video: {url}");
     let bytes = reqwest::blocking::get(&url)?.bytes()?;
@@ -47,10 +56,12 @@ fn pipeline(url: String, event_tx: Sender<AppEvent>) -> Result<()> {
         frame_rx,
         audio_path,
     });
+    wake(&waker);
 
     // ── decode video frames ───────────────────────────────────────────────────
-    decode_video(&path, width, height, fps, frame_tx)?;
+    decode_video(&path, width, height, fps, frame_tx, waker.clone())?;
     let _ = event_tx.send(AppEvent::VideoEnded);
+    wake(&waker);
 
     let _ = std::fs::remove_file(&tmp_path);
     Ok(())
@@ -125,6 +136,7 @@ fn decode_video(
     height: u32,
     fps: f64,
     tx: SyncSender<VideoFrame>,
+    waker: CtxWaker,
 ) -> Result<()> {
     let mut child = Command::new("ffmpeg")
         .args(["-i", path, "-f", "rawvideo", "-pix_fmt", "rgba", "pipe:1"])
@@ -153,6 +165,7 @@ fn decode_video(
                 if tx.send(frame).is_err() {
                     break; // receiver dropped (app navigated away)
                 }
+                wake(&waker);
                 frame_idx += 1;
             }
             Err(_) => break, // EOF or pipe closed

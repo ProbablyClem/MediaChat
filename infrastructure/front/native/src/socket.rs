@@ -6,12 +6,20 @@ use rust_socketio::{
 use serde_json::json;
 use std::sync::mpsc::Sender;
 
-use crate::types::{AppEvent, MediaChat};
+use crate::types::{wake, AppEvent, CtxWaker, MediaChat};
 
-pub async fn run_socket(server_url: String, room: String, tx: Sender<AppEvent>) -> Result<()> {
+pub async fn run_socket(
+    server_url: String,
+    room: String,
+    tx: Sender<AppEvent>,
+    waker: CtxWaker,
+) -> Result<()> {
     let tx_media = tx.clone();
     let tx_flush = tx.clone();
     let tx_skip = tx.clone();
+    let waker_media = waker.clone();
+    let waker_flush = waker.clone();
+    let waker_skip = waker.clone();
     let room_join = room.clone();
 
     let client = ClientBuilder::new(server_url)
@@ -26,12 +34,14 @@ pub async fn run_socket(server_url: String, room: String, tx: Sender<AppEvent>) 
         })
         .on("mediachat", move |payload, _| {
             let tx = tx_media.clone();
+            let waker = waker_media.clone();
             Box::pin(async move {
                 if let Payload::Text(values) = payload {
                     for val in values {
                         match serde_json::from_value::<MediaChat>(val) {
                             Ok(mc) => {
                                 let _ = tx.send(AppEvent::NewMediaChat(mc));
+                                wake(&waker);
                             }
                             Err(e) => log::warn!("mediachat parse error: {e}"),
                         }
@@ -41,14 +51,18 @@ pub async fn run_socket(server_url: String, room: String, tx: Sender<AppEvent>) 
         })
         .on("flush", move |_, _| {
             let tx = tx_flush.clone();
+            let waker = waker_flush.clone();
             Box::pin(async move {
                 let _ = tx.send(AppEvent::Flush);
+                wake(&waker);
             })
         })
         .on("skip", move |_, _| {
             let tx = tx_skip.clone();
+            let waker = waker_skip.clone();
             Box::pin(async move {
                 let _ = tx.send(AppEvent::Skip);
+                wake(&waker);
             })
         })
         .on("error", |err, _| {
