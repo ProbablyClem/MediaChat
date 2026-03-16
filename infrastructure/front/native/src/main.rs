@@ -43,8 +43,8 @@ fn main() -> anyhow::Result<()> {
     {
         let tx = event_tx.clone();
         let waker = waker.clone();
-        let server = args.server.clone();
-        let room = args.room.clone();
+        let server = args.server;
+        let room = args.room;
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
             if let Err(e) = rt.block_on(socket::run_socket(server, room, tx, waker)) {
@@ -63,7 +63,9 @@ fn main() -> anyhow::Result<()> {
             // is handled instead via Win32 SetLayeredWindowAttributes(LWA_COLORKEY).
             .with_mouse_passthrough(true)
             .with_active(false)
-            .with_fullscreen(true),
+            .with_fullscreen(false)
+            .with_decorations(false)
+            .with_taskbar(false),
         renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
