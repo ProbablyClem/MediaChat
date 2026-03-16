@@ -9,9 +9,9 @@ use std::{
 use egui::{ColorImage, TextureOptions};
 
 use crate::{
+    events::AppEvent,
     media::{ActiveMedia, MediaChat, MediaType},
-    types::{wake, AppEvent, CtxWaker},
-    ui::{decode_circular, decode_image},
+    ui::{decode_circular, decode_image, wake, CtxWaker},
     video::{spawn_video_decoder, VideoFrame},
 };
 

@@ -1,11 +1,27 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  eframe::App — render loop
-// ─────────────────────────────────────────────────────────────────────────────
+use std::sync::{Arc, OnceLock};
 
 use egui::{Align2, Color32, ColorImage, FontId, Pos2, Rect, Vec2};
 
 use crate::app::App;
 
+// ─── egui wakeup helper ────────────────────────────────────────────────────
+/// A cheaply-cloneable handle that lets background threads request an egui repaint.
+/// The inner OnceLock is set once, in App::new, after the egui context is ready.
+pub type CtxWaker = Arc<OnceLock<egui::Context>>;
+
+pub fn new_waker() -> CtxWaker {
+    Arc::new(OnceLock::new())
+}
+
+pub fn wake(w: &CtxWaker) {
+    if let Some(ctx) = w.get() {
+        ctx.request_repaint();
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  eframe::App — render loop
+// ─────────────────────────────────────────────────────────────────────────────
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // One-time Win32 overlay setup: color-key transparency + remove decorations

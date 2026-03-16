@@ -7,8 +7,9 @@ use serde_json::json;
 use std::sync::mpsc::Sender;
 
 use crate::{
+    events::AppEvent,
     media::MediaChat,
-    types::{wake, AppEvent, CtxWaker},
+    ui::{wake, CtxWaker},
 };
 
 pub async fn run_socket(

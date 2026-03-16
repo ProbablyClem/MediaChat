@@ -1,12 +1,13 @@
 mod app;
+mod events;
 mod media;
 mod socket;
-mod types;
 mod ui;
 mod video;
 use clap::Parser;
 use std::sync::mpsc;
-use types::new_waker;
+
+use crate::ui::new_waker;
 mod windows;
 
 #[derive(Parser)]
@@ -35,7 +36,7 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // ── event channel: socket → app ──────────────────────────────────────────
-    let (event_tx, event_rx) = mpsc::channel::<types::AppEvent>();
+    let (event_tx, event_rx) = mpsc::channel::<events::AppEvent>();
 
     // ── waker: set once egui context is ready, then used by all bg threads ──
     let waker = new_waker();

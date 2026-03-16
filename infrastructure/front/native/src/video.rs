@@ -10,7 +10,8 @@ use std::sync::mpsc::SyncSender;
 
 use anyhow::{anyhow, Result};
 
-use crate::types::{wake, AppEvent, CtxWaker};
+use crate::events::AppEvent;
+use crate::ui::{wake, CtxWaker};
 
 /// Number of decoded frames buffered in the channel before back-pressure kicks in.
 const FRAME_BUF: usize = 15;
