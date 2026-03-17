@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo:*)",
+      "Bash(winget:*)",
+      "Bash(vcpkg:*)",
+      "Bash(where.exe ffmpeg)",
+      "Bash(export:*)",
+      "Bash(where.exe link:*)",
+      "Bash(ls:*)",
+      "Bash(\"/c/Program Files \\(x86\\)/Microsoft Visual Studio/Installer/vs_installer.exe\" modify:*)",
+      "Bash(find:*)",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}

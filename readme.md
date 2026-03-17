@@ -44,6 +44,85 @@ Inspired by the **CCB**, a collective of French streamers, MediaChat allows you 
     ```
 ---
 
+## 🖥️ Native Overlay (Windows)
+
+An alternative to Transparent Overlay — a lightweight Rust app that renders media directly on a fullscreen transparent window. No browser, no webview.
+
+### Prerequisites
+
+Install the following **once** on your Windows machine:
+
+**1. Rust (MSVC toolchain)**
+```powershell
+winget install Rustlang.Rustup
+# Then in a new terminal:
+rustup default stable-x86_64-pc-windows-msvc
+```
+
+**2. Visual Studio Build Tools 2022** (C++ compiler)
+```powershell
+winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --norestart"
+```
+
+**3. LLVM** (required by some build dependencies)
+```powershell
+winget install LLVM.LLVM
+```
+
+**4. FFmpeg BtbN GPL Shared 7.1** (runtime + build)
+```powershell
+winget install BtbN.FFmpeg.GPL.Shared.7.1
+```
+Then add the FFmpeg `bin/` folder to your system PATH — find it under:
+```
+%LOCALAPPDATA%\Microsoft\WinGet\Packages\BtbN.FFmpeg.GPL.Shared.7.1_*\ffmpeg-*\bin
+```
+> `ffmpeg`, `ffprobe` and `ffplay` must all be reachable from PATH at runtime.
+
+---
+
+### Build
+
+```bash
+cd infrastructure/front/native
+cargo build --release
+```
+
+The binary is output to `target/release/mediachat-native.exe`.
+
+---
+
+### Run
+
+```bash
+./target/release/mediachat-native.exe \
+  --server <BACKEND_URL> \
+  --room <your-discord-username>
+```
+
+| Argument | Description | Example |
+|---|---|---|
+| `--server` | Socket.IO backend URL (not the frontend) | `http://q0g4s...sslip.io` |
+| `--room` | Your Discord username (the room to join) | `elkofy` |
+
+> ⚠️ The `--server` URL is the **backend** URL, not the frontend. If you're self-hosting with Docker, expose the backend or use its internal subdomain.
+
+---
+
+### Flags
+
+| Flag | Default |
+|---|---|
+| `--room` | `default` |
+| `--server` | `http://localhost:3000` |
+
+You can also set the server via environment variable:
+```bash
+export MEDIACHAT_SERVER=http://...
+./mediachat-native.exe --room elkofy
+```
+
+---
 
 ## 🛠️ Technologies
 
