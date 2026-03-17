@@ -6,10 +6,22 @@ mod tray;
 mod ui;
 mod video;
 use clap::Parser;
-use std::sync::mpsc;
+use std::{fs, path::PathBuf, sync::mpsc};
 
 use crate::ui::new_waker;
 mod windows;
+
+/// Get logs file path in the application data directory
+fn get_logs_path() -> PathBuf {
+    let logs_dir = if let Ok(appdata) = std::env::var("APPDATA") {
+        PathBuf::from(appdata).join("MediaChat")
+    } else {
+        PathBuf::from(".")
+    };
+    let _ = fs::create_dir_all(&logs_dir);
+    log::info!("{}", &logs_dir.as_os_str().to_str().unwrap());
+    logs_dir.join("mediachat.log")
+}
 
 #[derive(Parser)]
 #[command(
@@ -32,7 +44,16 @@ struct Args {
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let log_path = get_logs_path();
+    let log_file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)?;
+    
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .target(env_logger::Target::Pipe(Box::new(log_file)))
+        .format_timestamp_millis()
+        .init();
 
     let args = Args::parse();
 
@@ -44,13 +65,16 @@ fn main() -> anyhow::Result<()> {
 
     // ── tray icon with menu event listener ────────────────────────────────────
     let tray_icon = tray::create_tray_icon()?;
-    std::thread::spawn(|| {
+    let log_path_clone = log_path.clone();
+    std::thread::spawn(move || {
         let receiver = tray_icon::menu::MenuEvent::receiver();
         for event in receiver {
             match event.id.0.as_str() {
                 "quit" => std::process::exit(0),
                 "change_url" => log::info!("Change URL requested"),
-                "check_logs" => log::info!("Check logs requested"),
+                "check_logs" => {
+                    let _ = std::process::Command::new("notepad").arg(&log_path_clone).spawn();
+                }
                 _ => {}
             }
         }
