@@ -36,6 +36,9 @@ pub struct App {
     pub(crate) win32_initialized: bool,
 
     waker: CtxWaker,
+
+    /// Keep tray icon alive for the duration of the app
+    _tray_icon: Option<tray_icon::TrayIcon>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,6 +51,7 @@ impl App {
         event_tx: Sender<AppEvent>,
         event_rx: Receiver<AppEvent>,
         waker: CtxWaker,
+        tray_icon: Option<tray_icon::TrayIcon>,
     ) -> Self {
         // Register the egui context so background threads can request repaints
         let _ = waker.set(cc.egui_ctx.clone());
@@ -64,6 +68,7 @@ impl App {
                 .unwrap(),
             win32_initialized: false,
             waker,
+            _tray_icon: tray_icon,
         }
     }
 
