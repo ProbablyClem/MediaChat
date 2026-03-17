@@ -6,7 +6,8 @@ use tray_icon::{
 pub fn create_tray_icon() -> anyhow::Result<tray_icon::TrayIcon> {
     let tray_menu = _create_tray_menu();
     let tray_icon = TrayIconBuilder::new()
-        .with_icon(Icon::from_path("assets/icon.ico", None).unwrap_or_else(|_| {
+        .with_icon(Icon::from_resource(1, None).unwrap_or_else(|e| {
+            log::error!("error loading resource : {:?}", e);
             let fallback_pixels = vec![255; 32 * 32 * 4];
             Icon::from_rgba(fallback_pixels, 32, 32).expect("Error creating fallback icon")
         }))
