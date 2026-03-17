@@ -2,6 +2,7 @@ mod app;
 mod events;
 mod media;
 mod socket;
+mod tray;
 mod ui;
 mod video;
 use clap::Parser;
@@ -41,6 +42,20 @@ fn main() -> anyhow::Result<()> {
     // ── waker: set once egui context is ready, then used by all bg threads ──
     let waker = new_waker();
 
+    // ── tray icon with menu event listener ────────────────────────────────────
+    let tray_icon = tray::create_tray_icon()?;
+    std::thread::spawn(|| {
+        let receiver = tray_icon::menu::MenuEvent::receiver();
+        for event in receiver {
+            match event.id.0.as_str() {
+                "quit" => std::process::exit(0),
+                "change_url" => log::info!("Change URL requested"),
+                "check_logs" => log::info!("Check logs requested"),
+                _ => {}
+            }
+        }
+    });
+
     // ── Socket.IO in a dedicated OS thread with its own Tokio runtime ────────
     {
         let tx = event_tx.clone();
@@ -75,7 +90,15 @@ fn main() -> anyhow::Result<()> {
     eframe::run_native(
         "MediaChat",
         options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, event_tx, event_rx, waker)))),
+        Box::new(move |cc| {
+            Ok(Box::new(app::App::new(
+                cc,
+                event_tx,
+                event_rx,
+                waker,
+                Some(tray_icon),
+            )))
+        }),
     )
     .map_err(|e| anyhow::anyhow!("eframe error: {e}"))
 }

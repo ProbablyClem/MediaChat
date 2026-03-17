@@ -40,6 +40,7 @@ env_logger = "0.11"
 
 # Error handling
 anyhow = "1"
+tray-icon = "0.21.3"
 
 # Windows API for overlay window setup
 [target.'cfg(windows)'.dependencies]
